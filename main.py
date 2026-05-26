@@ -721,10 +721,11 @@ class SubagentCaller(Star):
                 notification = (
                     f"＜system_instruction＞子代理任务 {jid} {status_text}。"
                     f"任务结果摘要：{safe_preview}\n\n"
-                    f"请选择以下两种方式之一处理：\n"
+                    f"当前对话中可能还有用户后续补充的指示，请结合完整对话历史判断如何处理。\n"
+                    f"请选择以下方式之一处理：\n"
                     f"1. 通知用户 → 直接输出你的回复内容，系统会自动发送给用户\n"
                     f"2. 继续转派 → 使用 call_subagent action=dispatch，系统会处理转派\n\n"
-                    f"注意：你必须二选一，不允许不做任何操作。"
+                    f"注意：必须选择一种方式，不允许不做任何操作。"
                     f"无需调用 send_message_to_user。＜/system_instruction＞"
                 )
 
