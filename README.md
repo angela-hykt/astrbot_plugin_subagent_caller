@@ -221,11 +221,29 @@ An [AstrBot](https://github.com/Soulter/AstrBot) plugin that provides a `call_su
 - **External UDP wakeup** — external devices can send UDP broadcast packets to wake the LLM
 - **Peer delegation** — sub-agents can delegate subtasks to each other via `call_peer`, with loop detection and depth protection (v1.7.0)
 
-## Quick Start
+## How It Works
 
-Place the plugin directory under AstrBot's `plugins/` directory.
+```
+User
+  └─ Main Agent
+       └─ call_subagent(action=dispatch, ...) → returns job_id immediately
+            └─ Background sub-agent task runs independently
+                 └─ On completion:
+                      ├─ _notify_llm → _wake_up_llm → rebuild main agent via build_main_agent
+                      │    └─ Main agent processes result (reply to user or dispatch again)
+                      └─ UDP broadcast → listener → _wake_up_llm (backup path)
+```
 
-### Configuration
+Key design:
+- **Async dispatch**: returns `job_id` immediately without blocking conversation
+- **Real session wakeup**: reconstructs main agent with full toolchain and persona
+- **Dual notification path**: `_notify_llm` → `_wake_up_llm`, UDP broadcast as fallback
+
+## Installation
+
+Place the plugin directory under AstrBot's `plugins/` directory, or install via the AstrBot WebUI plugin marketplace.
+
+## Configuration
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -243,23 +261,126 @@ Place the plugin directory under AstrBot's `plugins/` directory.
 | `udp_self_only` | bool | `true` | Reject UDP packets from non-local addresses. |
 | `notify_on_complete` | bool | `true` | Wake the main agent after each sub-agent task completes. |
 
-### Usage
+**Agent selection logic** (when `agent_name` not specified in `dispatch`):
+1. Try `agent_a` → `agent_b` → `agent_c` in order, pick the first that exists
+2. If none configured, pick the first available sub-agent
 
-**Dispatch a task**:
-```
+## Usage
+
+### Main Agent: `call_subagent`
+
+#### `action=dispatch`
+
+``` 
 call_subagent action=dispatch request_text="Check server status" agent_name="tool_executor"
 ```
 
-**Check status**: `call_subagent action=status`
+Returns immediately with `job_id`. Task runs in background. The main agent is woken on completion if `notify_on_complete` is enabled.
 
-**Fetch result**: `call_subagent action=fetch job_id=job_1`
+#### `action=status`
 
-**Cancel task**: `call_subagent action=cancel job_id=job_2`
+```
+call_subagent action=status
+```
 
-**Peer delegation** (sub-agent):
+Shows all task statuses.
+
+#### `action=fetch`
+
+```
+call_subagent action=fetch job_id=job_1
+```
+
+Returns the task result and cleans it from memory.
+
+#### `action=cancel`
+
+```
+call_subagent action=cancel job_id=job_2
+```
+
+### Sub-agent: `call_peer`
+
+Sub-agents can delegate subtasks:
+
 ```
 call_peer agent_name="visualizer" request_text="Generate a bar chart from the following data: ..."
 ```
+
+**Safety mechanisms**: depth limit, loop detection, timeout propagation, async isolation.
+
+## Peer Delegation Flow
+
+```
+Main Agent
+  └─ call_subagent(agent="A", request="Analyze system status") → A starts
+       ├─ Step 1...
+       ├─ Needs chart → call_peer(agent="B", request="Generate CPU chart") → B executes
+       │    └─ B done → returns chart result to A
+       ├─ Needs fix → call_peer(agent="C", request="Fix nginx config") → C executes
+       │    └─ C done → returns fix result to A
+       └─ A integrates results → returns to main agent (via fetch)
+```
+
+## UDP Wakeup
+
+### Packet Format
+
+**JSON (recommended)**:
+```json
+{
+  "magic": "astrbot_subagent_wakeup",
+  "event": "task_done",
+  "job_id": "job_3",
+  "status": "completed",
+  "summary": "Server check completed",
+  "error": ""
+}
+```
+
+**Plain text** (backward compatible):
+```
+astrbot_subagent_wakeup Server maintenance completed
+```
+
+**Event types**: `task_done`, `wakeup`, `alert`
+
+**Send example (Linux)**:
+```bash
+echo '{"magic":"astrbot_subagent_wakeup","event":"task_done","job_id":"job_3","status":"completed","summary":"Done"}' | nc -u -b -w1 255.255.255.255 25001
+```
+
+## API Reference
+
+### `call_subagent`
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `action` | Yes | `dispatch`/`status`/`fetch`/`cancel`/`stop` |
+| `request_text` | For `dispatch` | Task description for the sub-agent |
+| `agent_name` | No | Target sub-agent name; auto-select if empty |
+| `max_steps` | No | Max tool call steps for this dispatch |
+| `job_id` | For `fetch`/`cancel` | The job ID to retrieve or cancel |
+| `brief` | No | Short label (max 10 chars) for quick identification |
+
+### `call_peer`
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `agent_name` | Yes | Target sub-agent name |
+| `request_text` | Yes | Task description to delegate |
+| `max_steps` | No | Max steps for target agent (default: plugin config) |
+
+## Notify on Complete
+
+When `notify_on_complete = true` (default):
+- Main agent is woken in background on task completion
+- Reconstructed agent has full toolchain and persona
+- Agent autonomously decides: reply to user or dispatch more tasks
+
+When `notify_on_complete = false`:
+- Results are stored in memory and logged
+- Main agent checks results later via `call_subagent action=status`
 
 ## Version History
 

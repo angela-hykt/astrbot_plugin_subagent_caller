@@ -166,7 +166,7 @@ _SHELL_TOOL = FunctionTool(
 @register(
     "dangerous_subagent_caller",
     "angela-hykt",
-    "Provides call_subagent tool for dispatching tasks to sub-agents. Sub-agents inherit shell execution and peer delegation capabilities.",
+    "为主 agent 提供 call_subagent 工具，用于将任务派发给子代理异步执行。子代理继承 shell 执行和子代理间委派能力。",
     "1.7.0",
 )
 class SubagentCaller(Star):
@@ -181,7 +181,6 @@ class SubagentCaller(Star):
         self.max_steps = max(1, int(cfg.get("max_steps", 30)))
         self.tool_call_timeout = max(5, int(cfg.get("tool_call_timeout", 60)))
         self.task_timeout = max(10, int(cfg.get("task_timeout", 120)))
-        self.poll_interval = max(1, int(cfg.get("poll_interval", 1)))
         self.max_delegation_depth = max(0, int(cfg.get("max_delegation_depth", 3)))
         self.auto_notify = bool(cfg.get("auto_notify", True))
 
@@ -220,6 +219,16 @@ class SubagentCaller(Star):
         # 启动 UDP 监听
         if self.udp_enabled:
             self._udp_task = asyncio.create_task(self._udp_listener_loop())
+
+            def _check_udp_start(loop_task):
+                if loop_task.done() and not loop_task.cancelled():
+                    try:
+                        loop_task.result()
+                    except Exception as e:
+                        logger.error(f"[SubagentCaller] UDP监听异常退出: {e}")
+                        self._udp_task = None
+
+            self._udp_task.add_done_callback(_check_udp_start)
             logger.info(
                 f"[SubagentCaller] UDP广播唤醒已启动 | "
                 f"端口={self.udp_port} 暗号='{self.udp_magic}'"
@@ -260,7 +269,7 @@ class SubagentCaller(Star):
             f"agent_a={self.agent_a or '(未配置)'} agent_b={self.agent_b or '(未配置)'} agent_c={self.agent_c or '(未配置)'} "
             f" | "
             f"inherit_all_tools={self.inherit_all_tools} | "
-            f"max_steps={self.max_steps} tool_timeout={self.tool_call_timeout}s task_timeout={self.task_timeout}s poll_interval={self.poll_interval}min max_depth={self.max_delegation_depth} | "
+            f"max_steps={self.max_steps} tool_timeout={self.tool_call_timeout}s task_timeout={self.task_timeout}s max_depth={self.max_delegation_depth} | "
             f"auto_notify={self.auto_notify} | "
             f"udp_enabled={self.udp_enabled} udp_self_only={self.udp_self_only} notify_on_complete={self.notify_on_complete} | "
             f"多任务轮询调度已启用"
@@ -424,7 +433,12 @@ class SubagentCaller(Star):
             )
 
             # ── 防重复：task_done 事件中，如果 job 已被 _notify_llm 处理则跳过 ──
-            if event_type.strip().casefold() == "task_done" and job_id and job_id in self._notified_jobs:
+            skip_wake = False
+            if event_type.strip().casefold() == "task_done" and job_id:
+                async with self._task_lock:
+                    if job_id in self._notified_jobs:
+                        skip_wake = True
+            if skip_wake:
                 logger.info(
                     f"[SubagentCaller] UDP task_done 已由 _notify_llm 处理，跳过唤醒: "
                     f"job_id={job_id}"
@@ -601,7 +615,7 @@ class SubagentCaller(Star):
                     return
 
                 runner = result.agent_runner
-                async for _ in runner.step_until_done(30):
+                async for _ in runner.step_until_done(self.max_steps):
                     pass
 
                 llm_resp = runner.get_final_llm_resp()
@@ -729,8 +743,12 @@ class SubagentCaller(Star):
                     f"无需调用 send_message_to_user。＜/system_instruction＞"
                 )
 
-                await self._wake_up_llm(notification, session_id=event.unified_msg_origin, job_id=jid)
-                notify_ok = True
+                # 防止 _wake_lock 死锁：如果锁已被当前协程持有则跳过
+                if self._wake_lock.locked():
+                    logger.warning(f"[SubagentCaller] _wake_lock 已被占用，跳过重复唤醒 job_id={jid}")
+                else:
+                    await self._wake_up_llm(notification, session_id=event.unified_msg_origin, job_id=jid)
+                    notify_ok = True
 
             except Exception as e:
                 logger.error(f"[SubagentCaller] 后台唤醒失败: {e}")
@@ -739,9 +757,10 @@ class SubagentCaller(Star):
         # 仅在 _wake_up_llm 成功（或 notify_on_complete 关闭）时标记，
         # 确保失败时 UDP 广播能作为备用唤醒路径。
         if not self.notify_on_complete or notify_ok:
-            self._notified_jobs.add(jid)
-            if len(self._notified_jobs) > self._max_notified:
-                to_discard = len(self._notified_jobs) - self._max_notified // 2
+            async with self._task_lock:
+                self._notified_jobs.add(jid)
+                if len(self._notified_jobs) > self._max_notified:
+                    to_discard = len(self._notified_jobs) - self._max_notified // 2
                 for old in list(self._notified_jobs)[:to_discard]:
                     self._notified_jobs.discard(old)
 
@@ -1044,6 +1063,7 @@ class SubagentCaller(Star):
         async with self._task_lock:
             self._results[jid] = result
             self._completion_times[jid] = time.time()
+            self._running_jobs.pop(jid, None)
             # 限制 _results 大小，防止内存泄漏
             while len(self._results) > self._max_results:
                 oldest = min(self._completion_times, key=self._completion_times.get)
