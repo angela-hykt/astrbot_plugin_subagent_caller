@@ -1,0 +1,80 @@
+{
+  "agent_a": {
+    "type": "string",
+    "description": "首选子代理 A",
+    "default": "",
+    "hint": "填写子代理的精确名称，如 tool_executor。不填则自动选择第一个可用代理。"
+  },
+  "agent_b": {
+    "type": "string",
+    "description": "首选子代理 B",
+    "default": "",
+    "hint": "第二个首选子代理。留空则不启用。"
+  },
+  "agent_c": {
+    "type": "string",
+    "description": "首选子代理 C",
+    "default": "",
+    "hint": "第三个首选子代理。留空则不启用。"
+  },
+  "inherit_all_tools": {
+    "type": "bool",
+    "description": "是否继承所有 LLM 工具",
+    "default": true,
+    "hint": "开启后子代理继承所有通过 @filter.llm_tool 注册的工具（如 web_search_tavily）。关闭后仅使用子代理自身的工具。"
+  },
+  "max_steps": {
+    "type": "int",
+    "description": "子代理最大工具调用轮数",
+    "default": 30,
+    "hint": "子代理执行任务时最多能调用工具的步数。"
+  },
+  "tool_call_timeout": {
+    "type": "int",
+    "description": "单次工具调用超时（秒）",
+    "default": 60,
+    "hint": "子代理每次调用工具的超时时间。建议不低于 30 秒。"
+  },
+  "task_timeout": {
+    "type": "int",
+    "description": "单次任务总超时（秒）",
+    "default": 120,
+    "hint": "整个子代理任务的最大执行时间，超时自动取消。"
+  },
+  "udp_enabled": {
+    "type": "bool",
+    "description": "启用 UDP 广播唤醒",
+    "default": true,
+    "hint": "开启后插件在后台监听 UDP 广播包，收到匹配暗号后唤醒 LLM。"
+  },
+  "udp_port": {
+    "type": "int",
+    "description": "UDP 监听端口",
+    "default": 25001,
+    "hint": "插件监听 UDP 广播的端口。局域网内所有设备均可向此端口发送广播包。"
+  },
+  "udp_magic": {
+    "type": "string",
+    "description": "UDP 唤醒暗号",
+    "default": "astrbot_subagent_wakeup",
+    "hint": "仅包含此暗号的 UDP 包会触发唤醒，防止误触发。建议修改为自定义值。"
+  },
+  "notify_on_complete": {
+    "type": "bool",
+    "description": "任务完成后唤醒主 agent",
+    "default": true,
+    "hint": "开启后子代理任务完成时唤醒主 agent 处理并报告结果。关闭后仅记录日志，可后续手动查看。"
+  },
+  "udp_self_only": {
+    "type": "bool",
+    "description": "仅自收自发模式（拒绝外部包）",
+    "default": true,
+    "hint": "开启后仅接受本机发送的 UDP 广播包，外部设备发来的包会被忽略。默认开启，防止公共网络下的误唤醒和信息泄露。"
+  },
+  "max_delegation_depth": {
+    "type": "int",
+    "description": "子代理间最大委派深度",
+    "default": 3,
+    "hint": "子代理链式委派的层级数。深度=1 仅允许 A→B，深度=3 允许 A→B→C→D。建议不超过 5。"
+  }
+}

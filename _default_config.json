@@ -1,0 +1,15 @@
+{
+  "agent_a": "",
+  "agent_b": "",
+  "agent_c": "",
+  "inherit_all_tools": true,
+  "max_steps": 30,
+  "tool_call_timeout": 60,
+  "task_timeout": 120,
+  "udp_enabled": true,
+  "udp_port": 25001,
+  "udp_magic": "astrbot_subagent_wakeup",
+  "udp_self_only": true,
+  "notify_on_complete": true,
+  "max_delegation_depth": 3
+}
