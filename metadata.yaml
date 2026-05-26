@@ -10,4 +10,4 @@ support_platforms:
   - telegram
   - discord
   - wechat
-astrbot_version: ">=4.13"
+astrbot_version: ">=4.22"
