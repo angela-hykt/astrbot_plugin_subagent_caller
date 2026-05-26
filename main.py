@@ -165,7 +165,7 @@ _SHELL_TOOL = FunctionTool(
 
 @register(
     "dangerous_subagent_caller",
-    "洛小可",
+    "angela-hykt",
     "Provides call_subagent tool for dispatching tasks to sub-agents. Sub-agents inherit shell execution and peer delegation capabilities.",
     "1.7.0",
 )
