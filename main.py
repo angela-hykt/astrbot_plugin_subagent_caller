@@ -164,9 +164,9 @@ _SHELL_TOOL = FunctionTool(
 
 
 @register(
-    "dangerous_subagent_caller",
+    "astrbot_plugin_subagent_caller",
     "angela-hykt",
-    "为主 agent 提供 call_subagent 工具，用于将任务派发给子代理异步执行。子代理继承 shell 执行和子代理间委派能力。",
+    "为主 agent 提供 call_subagent 工具，用于将任务派发给子代理异步执行。注意：子代理继承 shell 执行权限，请确保子代理可信。",
     "1.7.0",
 )
 class SubagentCaller(Star):
