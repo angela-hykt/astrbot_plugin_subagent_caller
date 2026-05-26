@@ -1,5 +1,5 @@
 name: astrbot_plugin_subagent_caller
-display_name: Subagent Task Dispatcher
+display_name: 子代理任务调度器
 author: angela-hykt
 repo: https://github.com/angela-hykt/astrbot_plugin_subagent_caller
 version: "1.7.0"
