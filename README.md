@@ -8,7 +8,7 @@
 
 # 子代理任务调度器
 
-一个 [AstrBot](https://github.com/Soulter/AstrBot) 插件，为主 agent 提供 `call_subagent` 工具，用于将任务派发给子代理异步执行并获取结果。
+一个 [AstrBot](https://github.com/Soulter/AstrBot) 插件，为主 agent 提供 `call_subagent` 工具，用于将任务派发给子代理异步执行并获取结果。主要实现：agent派发任务后，任务完成、超时、失败都会主动唤醒agent，agent在后台根据情况继续转派或通知用户。
 
 ## 功能
 
