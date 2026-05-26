@@ -977,7 +977,7 @@ class SubagentCaller(Star):
                 f"{' → '.join(path)} → {agent_name} (循环!)"
             )
             return (
-                f"❌ 检测到循环委派！'{agent_name}' 已经在当前委派链中。\n"
+                f"❌ 检测到循环委派，'{agent_name}' 已经在当前委派链中。\n"
                 f"委派链: {' → '.join(path)} → {agent_name}\n"
                 f"请选择其他子代理或直接处理任务。"
             )
